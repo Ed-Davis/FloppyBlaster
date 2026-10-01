@@ -17,7 +17,7 @@ public struct AkaiSample: Equatable {
 
     public enum SampleError: LocalizedError {
         case notASample
-        var errorDescription: String? { "This isn't an Akai sample." }
+        public var errorDescription: String? { "This isn't an Akai sample." }
     }
 
     public init(name: String, sampleRate: Int, frames: [Int16]) {
