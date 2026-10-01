@@ -16,6 +16,9 @@ struct ContentView: View {
                 if let session = library.session {
                     DiskView(session: session)
                         .id(session.url)
+                } else if let mpc = library.mpcSession {
+                    MPCDiskView(session: mpc)
+                        .id(mpc.url)
                 } else if let error = library.openError {
                     Placeholder(symbol: "exclamationmark.triangle", title: "Can't open this disk", detail: error)
                 } else if library.root == nil {
@@ -28,7 +31,7 @@ struct ContentView: View {
             }
             .onDrop(of: [.fileURL], isTargeted: nil) { providers in
                 // Dropping an .img anywhere outside the file list opens it.
-                guard library.session == nil else { return false }
+                guard library.openDiskURL == nil else { return false }
                 Task {
                     if let url = await loadURLs(providers).first(where: { $0.pathExtension.lowercased() == "img" }) {
                         library.open(url)
@@ -94,9 +97,18 @@ struct Sidebar: View {
                     .help("Look for new disk images")
                     .disabled(library.root == nil)
                 Spacer()
-                Button { library.createBlankDisk() } label: { Image(systemName: "plus") }
-                    .help("New blank disk (S3000 format) in the selected folder")
-                    .disabled(library.root == nil)
+                Menu {
+                    ForEach(Library.BlankKind.allCases) { kind in
+                        Button(kind.menuTitle) { library.createBlankDisk(kind) }
+                    }
+                } label: {
+                    Image(systemName: "plus")
+                }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .help("New blank disk in the selected folder")
+                .disabled(library.root == nil)
             }
             .padding(8)
             if let root = library.root {
@@ -136,6 +148,7 @@ struct DiskView: View {
     @State private var renameText = ""
     @State private var renamingVolume = false
     @State private var volumeText = ""
+    @State private var programSamples: [AkaiDisk.Entry]?
     @AppStorage("importRate") private var importRate = 44_100
     @AppStorage("importChannels") private var importChannels = AudioImport.Channels.splitLeftRight.rawValue
 
@@ -166,6 +179,9 @@ struct DiskView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("Up to 12 characters: A–Z, 0–9, space and # + - .")
+        }
+        .sheet(isPresented: Binding(get: { programSamples != nil }, set: { if !$0 { programSamples = nil } })) {
+            AkaiProgramSheet(session: session, samples: programSamples ?? [])
         }
         .alert("Disk Name", isPresented: $renamingVolume) {
             TextField("Name", text: $volumeText)
@@ -261,6 +277,9 @@ struct DiskView: View {
                 Divider()
             }
             Button("Export…") { export(chosen, raw: NSEvent.modifierFlags.contains(.option)) }
+            if chosen.contains(where: { $0.kind == .sample }) {
+                Button("Make Program…") { programSamples = chosen.filter { $0.kind == .sample } }
+            }
             if chosen.count == 1, let entry = chosen.first {
                 Button("Rename…") { renameText = entry.name; renameTarget = entry }
             }
@@ -309,6 +328,9 @@ struct DiskView: View {
                 .disabled(session.entries.isEmpty)
             Button("Delete…") { confirmDelete = true }
                 .disabled(selection.isEmpty)
+            Button("Make Program…") { makeProgram() }
+                .help("Make a program that plays the selected samples (or all of them) one per key from C1")
+                .disabled(!session.entries.contains { $0.kind == .sample })
             Divider().frame(height: 18)
             Text("New samples:").foregroundStyle(.secondary)
             Picker("Rate", selection: $importRate) {
@@ -392,6 +414,11 @@ struct DiskView: View {
         } catch {
             library.alert = "Export failed: \(error.localizedDescription)"
         }
+    }
+
+    private func makeProgram() {
+        let chosen = selectedEntries.filter { $0.kind == .sample }
+        programSamples = chosen.isEmpty ? session.entries.filter { $0.kind == .sample } : chosen
     }
 
     private func deleteSelected() {

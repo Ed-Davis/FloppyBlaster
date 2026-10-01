@@ -1,12 +1,11 @@
 import AVFoundation
 import FloppyBlasterCore
 
-/// Plays Akai samples for auditioning.
+/// Plays samples for auditioning: Akai samples, and MPC .SND / WAV sounds.
 @MainActor
 final class SamplePlayer: ObservableObject {
-    /// The directory index of the sample playing, on the disk at `playingDisk`.
-    @Published private(set) var playing: Int?
-    private var playingDisk: URL?
+    /// What's playing: the disk image path plus the file's id on that disk.
+    @Published private(set) var playing: String?
 
     private let engine = AVAudioEngine()
     private let node = AVAudioPlayerNode()
@@ -15,22 +14,40 @@ final class SamplePlayer: ObservableObject {
 
     init() { engine.attach(node) }
 
-    func isPlaying(_ entry: AkaiDisk.Entry, on disk: URL) -> Bool {
-        playing == entry.index && playingDisk == disk
-    }
+    static func key(_ entry: AkaiDisk.Entry, on disk: URL) -> String { "\(disk.path)#\(entry.index)" }
+    static func key(_ item: FATEntry, on disk: URL) -> String { "\(disk.path)#\(item.id)" }
+
+    // MARK: Akai disks
+
+    func isPlaying(_ entry: AkaiDisk.Entry, on disk: URL) -> Bool { playing == Self.key(entry, on: disk) }
 
     func toggle(_ entry: AkaiDisk.Entry, in session: DiskSession) -> String? {
         if isPlaying(entry, on: session.url) { stop(); return nil }
-        return play(entry, in: session)
+        guard entry.kind == .sample else { return nil }
+        return play(key: Self.key(entry, on: session.url), name: entry.name) {
+            try session.sample(entry).pcmBuffer()
+        }
     }
 
-    /// Plays a sample. Returns an error message if it couldn't.
-    @discardableResult
-    func play(_ entry: AkaiDisk.Entry, in session: DiskSession) -> String? {
+    // MARK: MPC floppies
+
+    func isPlaying(_ item: FATEntry, on disk: URL) -> Bool { playing == Self.key(item, on: disk) }
+
+    func toggle(_ item: FATEntry, in session: MPCFloppySession) -> String? {
+        if isPlaying(item, on: session.url) { stop(); return nil }
+        guard MPCFloppySession.isSound(item) else { return nil }
+        return play(key: Self.key(item, on: session.url), name: item.name) {
+            try session.audioBuffer(for: item)
+        }
+    }
+
+    // MARK: Playing
+
+    /// Plays a buffer. Returns an error message if it couldn't.
+    private func play(key: String, name: String, load: () throws -> AVAudioPCMBuffer?) -> String? {
         stop()
-        guard entry.kind == .sample else { return nil }
         do {
-            guard let buffer = try session.sample(entry).pcmBuffer() else { return "\(entry.name) is empty." }
+            guard let buffer = try load(), buffer.frameLength > 0 else { return "\(name) is empty." }
             if connectedFormat != buffer.format {
                 if engine.isRunning { engine.stop() }
                 engine.disconnectNodeOutput(node)
@@ -44,15 +61,13 @@ final class SamplePlayer: ObservableObject {
                 Task { @MainActor in
                     guard let self, self.generation == current else { return }
                     self.playing = nil
-                    self.playingDisk = nil
                 }
             }
             node.play()
-            playing = entry.index
-            playingDisk = session.url
+            playing = key
             return nil
         } catch {
-            return "Couldn't play \(entry.name): \(error.localizedDescription)"
+            return "Couldn't play \(name): \(error.localizedDescription)"
         }
     }
 
@@ -60,6 +75,5 @@ final class SamplePlayer: ObservableObject {
         generation += 1
         if node.isPlaying { node.stop() }
         playing = nil
-        playingDisk = nil
     }
 }

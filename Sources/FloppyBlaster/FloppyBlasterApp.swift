@@ -30,9 +30,13 @@ struct FloppyBlasterApp: App {
                 Button("Floppy Blaster Help") { showHelp = true }
             }
             CommandGroup(replacing: .newItem) {
-                Button("New Blank Disk") { library.createBlankDisk() }
-                    .keyboardShortcut("n")
-                    .disabled(library.root == nil)
+                Menu("New Blank Disk") {
+                    ForEach(Library.BlankKind.allCases) { kind in
+                        Button(kind.menuTitle) { library.createBlankDisk(kind) }
+                            .keyboardShortcut(kind == .s3000 ? KeyboardShortcut("n") : nil)
+                    }
+                }
+                .disabled(library.root == nil)
             }
         }
     }

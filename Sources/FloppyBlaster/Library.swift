@@ -20,6 +20,8 @@ final class Library: ObservableObject {
     @Published private(set) var imageCount = 0
     @Published var selection: URL? { didSet { if selection != oldValue { openSelection() } } }
     @Published private(set) var session: DiskSession?
+    /// The open disk when it's an MPC2000XL (DOS) floppy rather than an Akai one.
+    @Published private(set) var mpcSession: MPCFloppySession?
     /// Why the selected image couldn't be opened, if it couldn't.
     @Published private(set) var openError: String?
     @Published var message: String?
@@ -98,14 +100,26 @@ final class Library: ObservableObject {
 
     private func openSelection() {
         openError = nil
-        guard let url = selection, url.pathExtension.lowercased() == "img" else { session = nil; return }
+        session = nil
+        mpcSession = nil
+        guard let url = selection, url.pathExtension.lowercased() == "img" else { return }
         do {
             session = try DiskSession(url: url)
-        } catch {
-            session = nil
-            openError = error.localizedDescription
+        } catch let akaiError {
+            // Not an Akai disk: perhaps an MPC2000XL (DOS) floppy.
+            do {
+                mpcSession = try MPCFloppySession(url: url)
+            } catch let dosError {
+                let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+                openError = MPCFloppySession.floppySizes.contains(size)
+                    ? dosError.localizedDescription
+                    : akaiError.localizedDescription
+            }
         }
     }
+
+    /// The URL of whichever disk is open.
+    var openDiskURL: URL? { session?.url ?? mpcSession?.url }
 
     /// The folder new disks go in: the selected folder, or the open image's folder, or the root.
     var targetFolder: URL? {
@@ -115,14 +129,37 @@ final class Library: ObservableObject {
         return selection.deletingLastPathComponent()
     }
 
-    func createBlankDisk() {
+    enum BlankKind: String, CaseIterable, Identifiable {
+        case s3000, s1000, mpc2000xl
+        var id: String { rawValue }
+        var menuTitle: String {
+            switch self {
+            case .s3000: return "Akai S3000 Format (S2000, S2800, S3000, S3200)"
+            case .s1000: return "Akai S1000 Format (S1000, S1100, S01)"
+            case .mpc2000xl: return "MPC2000XL (1.44 MB DOS)"
+            }
+        }
+        var description: String {
+            switch self {
+            case .s3000: return "a blank S3000-format disk"
+            case .s1000: return "a blank S1000-format disk"
+            case .mpc2000xl: return "a blank MPC2000XL (1.44 MB DOS) floppy"
+            }
+        }
+    }
+
+    func createBlankDisk(_ kind: BlankKind = .s3000) {
         guard let folder = targetFolder else { return }
         let url = folder.appendingPathComponent(DiskSession.nextBlankName(in: folder))
         do {
-            try DiskSession.createBlank(at: url)
+            switch kind {
+            case .s3000: try DiskSession.createBlank(at: url, layout: .s3000)
+            case .s1000: try DiskSession.createBlank(at: url, layout: .s1000)
+            case .mpc2000xl: try MPCFloppySession.createBlank(at: url)
+            }
             rescan()
             selection = url
-            message = "Created \(url.lastPathComponent), a blank S3000-format disk."
+            message = "Created \(url.lastPathComponent), \(kind.description)."
         } catch {
             alert = "Couldn't create a blank disk: \(error.localizedDescription)"
         }

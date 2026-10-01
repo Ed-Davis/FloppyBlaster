@@ -177,6 +177,45 @@ public final class DiskSession: ObservableObject {
         return result
     }
 
+    // MARK: Programs
+
+    /// Program numbers already used by programs on this disk.
+    public var usedProgramNumbers: Set<Int> {
+        var used = Set<Int>()
+        for entry in entries where entry.kind == .program {
+            if let data = try? disk.contents(of: entry), data.count > 15 { used.insert(Int(data[15])) }
+        }
+        return used
+    }
+
+    /// The lowest program number no program on the disk uses, so loading the
+    /// whole disk doesn't stack the new program on top of another one.
+    public var nextProgramNumber: Int {
+        let used = usedProgramNumbers
+        return (0...127).first { !used.contains($0) } ?? 0
+    }
+
+    public struct MadeProgram: Equatable {
+        public var name: String
+        public var keys: Int
+        public var programNumber: Int
+    }
+
+    /// Writes a new program to the disk that plays `keys` one per key from C1
+    /// up, each at its recorded pitch.
+    @discardableResult
+    public func makeProgram(named rawName: String, keys: [AkaiProgram.Key]) throws -> MadeProgram {
+        let fallback = keys.first.map { String($0.label.prefix(8)) + " KIT" } ?? "NEW KIT"
+        let cleaned = AkaiCharset.clean(rawName).isEmpty ? fallback : rawName
+        let name = disk.uniqueName(cleaned)
+        let number = nextProgramNumber
+        let data = try AkaiProgram.fileData(name: name, programNumber: number, keys: keys, layout: disk.layout)
+        var updated = disk
+        try updated.addFile(name: name, type: AkaiProgram.fileType(for: disk.layout), contents: data)
+        try commit(updated)
+        return MadeProgram(name: name, keys: keys.count, programNumber: number)
+    }
+
     public func delete(_ chosen: [AkaiDisk.Entry]) throws {
         var updated = disk
         // Highest index first, so earlier indexes stay valid as the directory closes up.
