@@ -116,6 +116,7 @@ struct HelpView: View {
             "MPC2000XL floppies (1.44 MB DOS disks) open the same way as Akai ones; Floppy Blaster tells them apart by itself. New Blank Disk can make one too.",
             "Audio files dropped on an MPC floppy become MPC .SND sounds (16-bit, 44.1 kHz, mono or stereo). .SND, .PGM, .APS and other MPC files are copied as they are. Names are 8 characters.",
             "Make Program… puts the selected sounds (or all of them) on pads A01, A02 … D16 of a new .PGM, up to 64.",
+            "The window shows the exact name each sound will have on the MPC: its file name, 8 characters of A–Z, 0–9, _ and -. ⚠︎ with the original name marks one that's shortened (a long Mac file name is seen by the MPC as its 8-character short name) or numbered because the name is taken. Program and APS names can be 16 characters; under the name you'll see how it shows on the MPC and the file it's saved as.",
             "Make APS… bundles the selected programs (or all of them) into an “all programs and sounds” file, so the MPC loads them and every sound they use in one go. Every sound must be on the floppy, in the same folder.",
             "Both check that the sounds fit in the MPC's sample memory: choose 2 MB (standard), 16 MB or 32 MB to match yours. Sequences have their own memory, so nothing needs to be left for them.",
             "Double-click a folder to open it; Up goes back.",

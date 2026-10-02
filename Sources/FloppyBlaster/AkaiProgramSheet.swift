@@ -25,7 +25,13 @@ struct AkaiProgramSheet: View {
                 .fixedSize(horizontal: false, vertical: true)
 
             Form {
-                TextField("Program name", text: $name)
+                TextField("Program name (up to 12 characters)", text: $name)
+                    .onChange(of: name) { _, new in
+                        if new.count > 12 { name = String(new.prefix(12)) }
+                    }
+                Text("Shows on the sampler as “\(session.disk.uniqueName(AkaiCharset.clean(name).isEmpty ? "NEW KIT" : name))”. Akai names are 12 characters: A–Z, 0–9, space and # + - . (lowercase becomes uppercase).")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 LabeledContent("Program number", value: "\(session.nextProgramNumber + 1)")
                     .help("The first number no other program on this disk uses, so loading the whole disk doesn't layer it with another program.")
             }

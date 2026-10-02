@@ -287,6 +287,38 @@ public final class MPCFloppySession: ObservableObject {
         String(format: "%.1f MB", Double(bytes) / 1_048_576)
     }
 
+    // MARK: Names
+
+    /// The .SND each sound will be played from, in order: a .SND keeps its
+    /// file's 8.3 name; other audio gets the .SND it will be converted to,
+    /// named from its full file name and unique in the folder. `makeProgram`
+    /// uses the same plan, so the window's preview matches what's written.
+    nonisolated public static func plannedSoundFiles(for sounds: [FATEntry], taken: Set<String>) -> [String] {
+        var taken = taken
+        return sounds.map { item in
+            if item.pathExtension.uppercased() == "SND" { return item.shortName.uppercased() }
+            let file = AudioPrep.uniqueName(baseName: (item.name as NSString).deletingPathExtension, extension: "SND", taken: taken)
+            taken.insert(file.uppercased())
+            return file
+        }
+    }
+
+    /// True when the MPC will show a sound under a name that isn't just its
+    /// file name tidied up: shortened to 8 characters (including a long Mac
+    /// name, which the MPC sees as its short name) or numbered.
+    nonisolated public static func soundNameChanged(_ item: FATEntry, file: String) -> Bool {
+        let stem = (file as NSString).deletingPathExtension
+        return stem != AudioPrep.baseName((item.name as NSString).deletingPathExtension, limit: 255)
+    }
+
+    /// Names already in the current folder (uppercase).
+    public var takenNames: Set<String> { (try? volume.names(in: currentDirectory)) ?? [] }
+
+    /// The file a program (or APS) name will be saved as.
+    public func plannedFileName(for rawName: String, extension ext: String, alsoTaken: [String] = []) -> String {
+        AudioPrep.uniqueName(baseName: rawName, extension: ext, taken: takenNames.union(alsoTaken.map { $0.uppercased() }))
+    }
+
     public struct MadeProgram: Equatable {
         public var file: String
         public var sounds: Int
@@ -327,18 +359,19 @@ public final class MPCFloppySession: ObservableObject {
         guard !sounds.isEmpty else { throw ProgramError.noSounds }
         let dir = currentDirectory
         var taken = try volume.names(in: dir)
+        let planned = Self.plannedSoundFiles(for: sounds, taken: taken)
+        taken.formUnion(planned.map { $0.uppercased() })
         var soundNames: [String] = []
         var newFiles: [(name: String, data: Data)] = []
         var total = 0
-        for item in sounds {
+        for (i, item) in sounds.enumerated() {
             if item.pathExtension.uppercased() == "SND" {
                 soundNames.append(Self.soundName(item))
                 total += MPCSound.memoryBytes(fileSize: Int(item.size))
                 continue
             }
             let channels = try Self.convertToMPC(volume.read(item), name: item.shortName)
-            let file = AudioPrep.uniqueName(baseName: Self.soundName(item), extension: "SND", taken: taken)
-            taken.insert(file.uppercased())
+            let file = planned[i]
             let base = (file as NSString).deletingPathExtension
             let data = MPCSound.fileData(name: base, channels: channels)
             newFiles.append((file, data))
@@ -455,7 +488,7 @@ public final class MPCFloppySession: ObservableObject {
     // MARK: Helpers
 
     /// The name shown on the MPC: up to 16 plain characters.
-    nonisolated static func displayName(_ raw: String, fallback: String) -> String {
+    nonisolated public static func displayName(_ raw: String, fallback: String) -> String {
         let cleaned = String(raw.unicodeScalars.filter { $0.isASCII && $0.value >= 32 && $0.value < 127 }.map(Character.init))
             .trimmingCharacters(in: .whitespaces)
         return cleaned.isEmpty ? fallback : String(cleaned.prefix(16))

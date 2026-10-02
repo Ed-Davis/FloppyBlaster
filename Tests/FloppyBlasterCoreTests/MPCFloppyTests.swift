@@ -117,6 +117,26 @@ final class MPCFloppyTests: XCTestCase {
         XCTAssertEqual(try MPCSound(data: session.contents(of: snd)).frameCount, 2000)
     }
 
+    func testSoundNamesShownBeforeMakingMatchWhatsWritten() throws {
+        let session = try MPCFloppySession(url: try blankFloppy())
+        let wav = try Data(contentsOf: wav("x.wav", frames: 500))
+        try session.change {
+            _ = try $0.createFile(in: .root, name: "Kick drum.wav", contents: wav)
+            _ = try $0.createFile(in: .root, name: "KICK_DRU.SND", contents: MPCSound.fileData(name: "KICK_DRU", channels: [[0, 1]]))
+        }
+        let kickWAV = try XCTUnwrap(session.items.first { $0.name == "Kick drum.wav" })
+        let planned = MPCFloppySession.plannedSoundFiles(for: [kickWAV], taken: session.takenNames)
+        XCTAssertEqual(planned, ["KICK_DR1.SND"], "named from the long name, numbered past the .SND already there")
+        XCTAssertTrue(MPCFloppySession.soundNameChanged(kickWAV, file: planned[0]))
+        XCTAssertEqual(session.plannedFileName(for: "Break kit", extension: "PGM", alsoTaken: planned), "BREAK_KI.PGM")
+
+        let made = try session.makeProgram(named: "Break kit", sounds: [kickWAV], memory: .mb32)
+        XCTAssertEqual(made.file, "BREAK_KI.PGM")
+        let pgm = try XCTUnwrap(session.items.first { $0.shortName == "BREAK_KI.PGM" })
+        XCTAssertEqual(try MPCProgram(data: session.contents(of: pgm)).soundNames, ["KICK_DR1"])
+        XCTAssertTrue(session.items.contains { $0.shortName == "KICK_DR1.SND" })
+    }
+
     func testMissingSoundsAndFailedChangesWriteNothing() throws {
         let url = try blankFloppy()
         let session = try MPCFloppySession(url: url)

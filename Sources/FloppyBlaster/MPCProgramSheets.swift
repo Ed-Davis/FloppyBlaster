@@ -15,6 +15,8 @@ struct MPCProgramSheet: View {
     private var used: [FATEntry] { Array(sounds.prefix(MPCProgram.maxSounds)) }
     private var total: Int { used.reduce(0) { $0 + MPCFloppySession.estimatedMemory($1) } }
     private var conversions: Int { used.filter { $0.pathExtension.uppercased() != "SND" }.count }
+    /// The exact .SND each pad will play (what Make Program writes).
+    private var planned: [String] { MPCFloppySession.plannedSoundFiles(for: sounds, taken: session.takenNames) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -24,7 +26,13 @@ struct MPCProgramSheet: View {
                 .fixedSize(horizontal: false, vertical: true)
 
             Form {
-                TextField("Program name", text: $name)
+                TextField("Program name (up to 16 characters)", text: $name)
+                    .onChange(of: name) { _, new in
+                        if new.count > 16 { name = String(new.prefix(16)) }
+                    }
+                Text(mpcNamePreview(name, extension: "PGM", session: session, alsoTaken: planned))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 Picker("MPC memory", selection: $memoryMB) {
                     ForEach(MPCMemory.allCases) { Text($0.label).tag($0.rawValue) }
                 }
@@ -32,14 +40,22 @@ struct MPCProgramSheet: View {
 
             List {
                 ForEach(Array(sounds.enumerated()), id: \.element.id) { index, item in
+                    let file = index < planned.count ? planned[index] : item.shortName
                     HStack {
                         Text(index < 64 ? MPCProgram.padNames[index] : "—")
                             .font(.body.monospaced())
                             .foregroundStyle(index < 64 ? Color.accentColor : .secondary)
                             .frame(width: 40, alignment: .leading)
-                        Text(MPCFloppySession.soundName(item)).font(.body.monospaced())
+                        Text((file as NSString).deletingPathExtension).font(.body.monospaced())
+                        if MPCFloppySession.soundNameChanged(item, file: file) {
+                            Text("⚠︎ \(item.name)")
+                                .font(.caption).foregroundStyle(.orange).lineLimit(1).truncationMode(.middle)
+                                .help("The MPC will show “\(item.name)” as \((file as NSString).deletingPathExtension): sound names are their file names, 8 characters of A–Z, 0–9, _ and -, numbered when one is already taken.")
+                        } else if item.pathExtension.uppercased() != "SND" {
+                            Text(item.name).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                        }
                         if item.pathExtension.uppercased() != "SND" {
-                            Text("→ .SND").font(.caption).foregroundStyle(.secondary)
+                            Text("→ \(file)").font(.caption).foregroundStyle(.secondary)
                         }
                         Spacer()
                         Text(MPCFloppySession.mb(MPCFloppySession.estimatedMemory(item)))
@@ -109,7 +125,13 @@ struct MPCAPSSheet: View {
                 .fixedSize(horizontal: false, vertical: true)
 
             Form {
-                TextField("APS name", text: $name)
+                TextField("APS name (up to 16 characters)", text: $name)
+                    .onChange(of: name) { _, new in
+                        if new.count > 16 { name = String(new.prefix(16)) }
+                    }
+                Text(mpcNamePreview(name, extension: "APS", session: session, alsoTaken: []))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 Picker("MPC memory", selection: $memoryMB) {
                     ForEach(MPCMemory.allCases) { Text($0.label).tag($0.rawValue) }
                 }
@@ -171,6 +193,14 @@ struct MPCAPSSheet: View {
             library.alert = "The APS wasn't made. \(error.localizedDescription)"
         }
     }
+}
+
+/// "Shows on the MPC as “Break kit”, saved as BREAK_KI.PGM."
+@MainActor
+func mpcNamePreview(_ name: String, extension ext: String, session: MPCFloppySession, alsoTaken: [String]) -> String {
+    let file = session.plannedFileName(for: name, extension: ext, alsoTaken: alsoTaken)
+    let shown = MPCFloppySession.displayName(name, fallback: (file as NSString).deletingPathExtension)
+    return "Shows on the MPC as “\(shown)”, saved as \(file)."
 }
 
 /// How much of the MPC's sound memory a program or APS takes.

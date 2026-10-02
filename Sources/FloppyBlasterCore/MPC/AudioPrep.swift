@@ -35,7 +35,7 @@ enum AudioPrep {
 
     // MARK: - Naming (DOS 8.3, uppercase)
 
-    nonisolated static func baseName(_ raw: String, fallback: String = "SAMPLE") -> String {
+    nonisolated static func baseName(_ raw: String, fallback: String = "SAMPLE", limit: Int = 8) -> String {
         let allowed = Set("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-")
         var result = ""
         for ch in raw.folding(options: .diacriticInsensitive, locale: nil).uppercased() {
@@ -47,7 +47,7 @@ enum AudioPrep {
         }
         result = result.trimmingCharacters(in: CharacterSet(charactersIn: "_"))
         if result.isEmpty { result = fallback }
-        return String(result.prefix(8))
+        return String(result.prefix(limit))
     }
 
     nonisolated static func uniqueName(for source: URL, taken: Set<String>) -> String {

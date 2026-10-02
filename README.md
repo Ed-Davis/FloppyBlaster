@@ -15,7 +15,7 @@ Floppy Blaster is MPC Blaster's sibling for floppy emulators. It works with the 
 - **Exports** samples as WAV, or any file as a raw Akai file (`.s3`, `.p1`…; hold Option). Raw files can be added back later.
 - **Renames and deletes** files, and renames the disk.
 - **Make Program (Akai)** makes a program that plays the chosen samples one per key from C1 (MIDI 36) up, each at its recorded pitch, like a drum kit. Stereo `-L`/`-R` pairs share a key, panned. Up to 92 keys (C1–G8). The program gets the first program number no other program on the disk uses. On an Akai, the disk itself is the "all programs and sounds" bundle: load the entire volume.
-- **MPC2000XL floppies** open like Akai ones. Audio dropped on them becomes `.SND` sounds; `.PGM`, `.APS` and other files are copied as they are. **Make Program** puts sounds on pads A01…D16 of a new `.PGM` (up to 64), and **Make APS** bundles programs and every sound they use. Both check the sounds fit in the MPC's sample memory (2, 16 or 32 MB).
+- **MPC2000XL floppies** open like Akai ones. Audio dropped on them becomes `.SND` sounds; `.PGM`, `.APS` and other files are copied as they are. **Make Program** puts sounds on pads A01…D16 of a new `.PGM` (up to 64), and **Make APS** bundles programs and every sound they use. Both check the sounds fit in the MPC's sample memory (2, 16 or 32 MB). The windows show each sound's exact 8-character name on the MPC, with ⚠︎ where it's shortened or numbered, and limit program names to 16 characters (12 for Akai programs), showing how they'll appear.
 - **New Blank Disk** makes a freshly formatted S3000, S1000 or MPC2000XL disk, numbered `001.img`, `002.img`… in the selected folder.
 
 ## Formats
