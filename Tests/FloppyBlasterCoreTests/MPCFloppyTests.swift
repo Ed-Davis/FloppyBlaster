@@ -118,23 +118,35 @@ final class MPCFloppyTests: XCTestCase {
     }
 
     func testSoundNamesShownBeforeMakingMatchWhatsWritten() throws {
+        // A long Mac name (written by Finder) is planned from the long name,
+        // and an existing long-named .SND is flagged: the MPC sees its short name.
+        let longWAV = FATEntry(name: "Kick drum.wav", shortName: "KICKDR~1.WAV", isDirectory: false, size: 1000,
+                               firstCluster: 2, modified: nil, attributes: 0x20, parent: .root, slots: [0, 1])
+        let longSND = FATEntry(name: "Snare from MPC.SND", shortName: "SNAREF~1.SND", isDirectory: false, size: 1000,
+                               firstCluster: 3, modified: nil, attributes: 0x20, parent: .root, slots: [2, 3])
+        let plan = MPCFloppySession.plannedSoundFiles(for: [longWAV, longSND], taken: ["KICK_DRU.SND"])
+        XCTAssertEqual(plan, ["KICK_DR1.SND", "SNAREF~1.SND"])
+        XCTAssertTrue(MPCFloppySession.soundNameChanged(longWAV, file: plan[0]))
+        XCTAssertTrue(MPCFloppySession.soundNameChanged(longSND, file: plan[1]))
+
+        // On a disk: what's shown is what's written.
         let session = try MPCFloppySession(url: try blankFloppy())
         let wav = try Data(contentsOf: wav("x.wav", frames: 500))
         try session.change {
-            _ = try $0.createFile(in: .root, name: "Kick drum.wav", contents: wav)
-            _ = try $0.createFile(in: .root, name: "KICK_DRU.SND", contents: MPCSound.fileData(name: "KICK_DRU", channels: [[0, 1]]))
+            _ = try $0.createFile(in: .root, name: "KICKDRUM.WAV", contents: wav)
+            _ = try $0.createFile(in: .root, name: "KICKDRUM.SND", contents: MPCSound.fileData(name: "KICKDRUM", channels: [[0, 1]]))
         }
-        let kickWAV = try XCTUnwrap(session.items.first { $0.name == "Kick drum.wav" })
+        let kickWAV = try XCTUnwrap(session.items.first { $0.shortName == "KICKDRUM.WAV" })
         let planned = MPCFloppySession.plannedSoundFiles(for: [kickWAV], taken: session.takenNames)
-        XCTAssertEqual(planned, ["KICK_DR1.SND"], "named from the long name, numbered past the .SND already there")
+        XCTAssertEqual(planned, ["KICKDRU1.SND"], "numbered past the .SND already there")
         XCTAssertTrue(MPCFloppySession.soundNameChanged(kickWAV, file: planned[0]))
         XCTAssertEqual(session.plannedFileName(for: "Break kit", extension: "PGM", alsoTaken: planned), "BREAK_KI.PGM")
 
         let made = try session.makeProgram(named: "Break kit", sounds: [kickWAV], memory: .mb32)
         XCTAssertEqual(made.file, "BREAK_KI.PGM")
         let pgm = try XCTUnwrap(session.items.first { $0.shortName == "BREAK_KI.PGM" })
-        XCTAssertEqual(try MPCProgram(data: session.contents(of: pgm)).soundNames, ["KICK_DR1"])
-        XCTAssertTrue(session.items.contains { $0.shortName == "KICK_DR1.SND" })
+        XCTAssertEqual(try MPCProgram(data: session.contents(of: pgm)).soundNames, ["KICKDRU1"])
+        XCTAssertTrue(session.items.contains { $0.shortName == "KICKDRU1.SND" })
     }
 
     func testMissingSoundsAndFailedChangesWriteNothing() throws {
