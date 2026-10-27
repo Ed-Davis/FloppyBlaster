@@ -2,7 +2,9 @@
 
 ![Floppy Blaster](Packaging/AppIcon.png)
 
-Move samples on and off Akai floppy disk images, and listen to them, on a Mac. By Ed Davis.
+THIS IS UNSUPPORTED. FloppyBlastr’s features are now part of Sampler Food, which is available on the Mac App Store. 
+
+Move samples on and off Akai floppy disk images as used on the Gotek USB floppy emulator.
 
 Floppy Blaster is MPC Blaster's sibling for floppy emulators. It works with the 1.6 MB `.img` files that a Gotek running FlashFloppy loads into an Akai S-series sampler. It's for file transfer and listening only: editing programs and sampler settings is left to [S-Control](https://github.com/Ed-Davis/S-Control).
 
